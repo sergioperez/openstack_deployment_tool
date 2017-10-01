@@ -1,0 +1,283 @@
+DEFAULT ROUTE: /opt/openstack_uc3m/
+
+Routes initialization:
+environment/route_generation.sh
+
+####
+ENVIRONMENT
+###
+set_variables.sh
+		PATH_INTERFACES		#Path to the interfaces file '/etc/network/interfaces' by default in Ubuntu 14.04
+
+
+generate_password.sh [DONE]
+		#Passwords: http://docs.openstack.org/mitaka/install-guide-ubuntu/environment-security.html
+	TESTS:
+		./generate_password.sh		-> Generates a length 10 password	Result: [TODO: 20]
+		./generate_password.sh 20	-> Generates a length 30 password	Result: [TODO: 60]
+		./generate_password.sh "sting"	-> Generates a length 10 password	Result: [TODO: 20]
+
+
+configure_interface_static.sh
+	TODO: At the moment this step is done manually
+
+configure_interface_manual.sh
+	TODO: At the moment this step is done manually
+
+configure_name_resolution.sh
+	TODO: Same as the last one
+
+set_hosts scripts	[TODO: Almost done]
+(FOLDER)
+#TODO: Replace host_file_path with the global variable stated at set_variables.sh
+	add_host.sh
+		Arguments: ip hostname host_file_path
+	remove_host.sh
+		Arguments: host_name host_file_path	
+
+verify_conectivity.sh
+#TODO
+
+REQ:install_package.sh
+(FOLDER apt)
+	install_chrony.sh
+		TODO: Solve problem of the install_package.sh path
+
+?verify_package_installation	
+
+chrony_configure_server.sh
+TODO
+
+[DONE] restart_chrony.sh
+
+
+?verify_chrony.sh
+
+REQ:add_repository.sh	install_package.sh [BOTH DONE]
+[done] enable_openstack_repository.sh
+	TODO: Solve reqs path 
+
+REQ: install_package.sh [DONE]	
+[done] install_openstack_client.sh
+TODO:Solve reqs path
+
+REQ: install_package.sh [DONE
+[SEMI done]install_mariadb.sh
+TODO reqs path
+TODO probably asks to the user for a database password: fix it to do it automatically (probably done at modules folder)
+	
+configure_mariadb.sh
+TODO: Probably at modules folder
+
+[done] restart_mariadb.sh
+
+[done] secure_mariadb.sh
+
+[done] install_mongodb.sh
+
+configure_mongodb.sh
+	probably done at modules
+stop_mongodb.sh
+	TODO: SERVICE STOPPING SCRIPT
+remove_mongodb_journal.sh
+	TODO
+start_mongodb.sh
+	TODO
+
+[done] install_rabbitmq.sh
+
+[done] add_openstack_user_rabbitmq.sh
+
+[done]set_permissions_user_rabbitmq.sh
+
+
+[done]install_memcached.sh
+	
+configure_memcached.sh
+TODO (probably at modules)
+
+restart_memcached.sh
+TODO: restart service script
+
+
+
+##################
+ IDENTITY SERVICE
+##################
+
+	$$ Install and configure
+
+---Prerequisites
+TODO: get it from modules folder
+create_database_keystone.sh
+configure_database_keystone.sh
+generate_administration_token.sh
+	TODO: Use generator
+
+---Components
+[done] disable_keystone_autoinit.sh
+[done] install_keystone.sh
+set_keystone_configuration_files.sh
+TODO: Probably at modules
+populate_identity_database.sh
+TODO: Probably at modules
+[DONE]initialize_fernet_keys
+
+----Apache
+set_servername_controller.sh
+create_wsgi_keystone.conf
+TODO Probably at modules packages
+enable_identity_virtual_hosts.sh
+
+---Finalize installation
+[DOne]restart_apache.sh
+[done]remove_sqlite_database.sh
+
+	$$ Create the service entity and API endopoints
+	?We must use a temporary authentication token created at "Install and configure"
+---Prerequisites
+[DONE]export_variables.sh
+
+---Create service entity and API endpoints
+[done] create_identity_service.sh
+[done] create_identity_endpoints.sh
+#For simplicity, there will only be one region used
+
+---Create domain, projects, users and roles
+[done] create_domain.sh
+[done] create_admin_project.sh
+[todo] create_admin_user.sh
+	AVOID PASSWORD PROMPT
+
+[done] create_admin_role.sh
+[done]add_role_admin_to_user_admin.sh
+[done]create_generic_service.sh
+[done todo]create_demo_project.sh
+[done todo]create_demo_user.sh
+[done]create_user_role.sh
+[done]add_user_role_to_demo_user.sh
+
+--Verify operation
+[done todo]unset_temporary_variables.sh
+[done todo]request_admin_auth_token.sh
+[done todo]request_demo_auth_token.sh
+
+[TODO]
+set_admin_openrc_variables.sh
+set_demo_openrc_variables.sh
+
+load_admin_openrc.sh
+request_auth_token.sh
+
+
+#########################
+IMAGE SERVICE
+#########################
+--Prerequisites
+[todo]setup_image_database.sh
+[todo]source_admin_credentials.sh
+[todo done]setup_glance_user.sh
+[done]create_api_endpoints.sh
+
+
+$$
+Install and configure components
+$$
+
+[done]install_glance.sh
+[done]configure_glance.sh
+[todo[setup_glance_api.sh
+[todo]setup_glance_registry.sh
+[done]populate_service_database.sh
+[done]restart_image_service.sh
+
+?[todo]verify_operation.sh
+
+
+
+
+#####################3
+COMPUTE SERVICE			(Nova)
+#####################
+#	Prerequisites
+create_databases.sh
+source_admin_credentials.sh	?
+[done todo]create_nova_user.sh
+
+[done]set_nova_user_roles.sh
+[done]create_nova_service_entity.sh
+
+[done]create_compute_service_api_endpoints.sh
+
+
+#	Install and configure components
+[done]install_nova_packages.sh
+[todo[]configure_nova.sh
+[done]populate_compute_databases.sh
+[done]finalize_nova_installation.sh
+
+
+#	Install and configure a compute node
+[done]install_packages.sh
+configure_nova.sh
+TODO:Probably something missing here
+finalize_installation.sh
+[done]restart_compute_service.sh
+[todo]verify_operation.sh
+
+//todo: Es lo mismo?
+install_nova_packages.sh
+configure_nova.sh
+populate_compute_databases.sh
+finalize_nova_installation.sh
+
+
+
+###################################
+	NETWORKING SERVICE
+###################################
+--Prerequisites
+	create_database.sh
+	set_database_permissions.sh // populate_database.sh ?
+
+	[done todo]source_admin_credentials.sh
+
+	[done todo]create_neutron_user.sh
+	[done]add_admin_role_to_neutron_user.sh	
+	[done]create_neutron_service_entity.sh
+	
+	[done] create_networking_service_endpoints.sh
+--Configure networking options
+	[todo] configure_networking_options.sh
+
+--Configure metadata agent
+	[todo] configure_metadata_agent.sh
+
+--Configure Compute to use Networking
+	@TODO: First?
+	[todo] configure_compute_to_use_networking.sh
+
+--Finalize installation
+	[done]populate_database.sh
+	[done]restart_services.sh
+	
+[TODO] [todo] two types of network
+
+#Install and configure compute node
+	[done] install_components.sh
+	[todo] configure_neutron.sh
+	[todo] configure_nova_touse_networking.sh
+	[done] finalize_installation.sh
+
+[TODO] Two types of network
+
+verify_operation.sh
+
+
+###############################
+	DASHBOARD
+###############################
+[done]install_packages.sh
+configure_dashboard.sh
+finalize_installatio.sh
+verify_operation.sh

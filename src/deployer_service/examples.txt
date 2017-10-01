@@ -1,0 +1,16 @@
+ws.send('{"controller":{"ip": "192.168.1.180","username": "user","password": "user","rootpass": "root","type": "controller", "hostname": "controller","services": ["identity", "image"]},"compute":{"ip": "192.168.1.190","username": "root","password": "root","rootpass": "root","type": "compute", "hostname" = "compute", "services": ["compute"]}}')
+
+
+
+
+{"controller":{"ip": "192.168.1.180","username": "user","password": "user","rootpass": "root","type": "controller","services": ["identity", "image"]},"compute":{"ip": "192.168.1.190","username": "user","password": "user","rootpass": "root","type": "controller","services":["compute","networking","dashboard","blockstorage","sharedfilesystem","objectstorage","orchestration","telemetry","database"]}}
+
+
+
+{"controller":{"ip": "192.168.1.180", "management_ip": "192.168.1.180", "username": "root","password": "root","rootpass": "root","type": "controller", "hostname": "controller","services": ["identity", "image","compute-controller", "networking-controller", "dashboard"]},"compute":{"ip": "192.168.1.190","management_ip": "192.168.1.190", "username": "root","password": "root","rootpass": "root","type": "compute", "hostname" : "compute", "services": ["compute","networking"]}}
+
+{"user1":{"role":"something", "privileges": ["read","edit","execute","admin"]}}
+
+
+
+. ~/vars.sh && 

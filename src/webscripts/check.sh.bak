@@ -1,0 +1,59 @@
+#!/bin/bash
+
+#Checks if the deployer variables are available
+
+if [ "$1" == "" ]
+then
+	echo "Usage ./check.sh url_package"
+	exit
+fi
+
+if [ "$OPENSTACK_DEPLOYER_PATH" == "" ]
+then #If there are no installer variables
+	if [ -f '/root/generate_routes.sh' ] && [ -f '/root/keys/keys.sh' ]
+	then #If the files with the variables are available
+		#Source the variables
+		. /root/set_variables.sh
+		. /root/generate_routes.sh
+		. /root/keys/keys.sh
+	else
+		#If the files are not available, download them
+		#Get root access
+		#sudo su
+
+		#Go to /root
+		cd
+
+		#Download deploy scripts
+		wget -N $1
+
+		#Decompress scripts
+		tar -zxf release1.tar.gz
+		
+		#Source required variables
+		source set_variables.sh
+
+		#Source keys
+		source keys/keys.sh
+
+		#Generate routes ($OPENSTACK_DEPLOYER_PATH)
+		. ./generate_routes.sh
+
+		#Creating OPENSTACK_DEPLOYER_PATH
+		mkdir $OPENSTACK_DEPLOYER_PATH
+
+		#Copy variables and keys scripts
+		cp set_variables.sh $OPENSTACK_DEPLOYER_PATH
+		cp keys/keys.sh $OPENSTACK_DEPLOYER_PATH
+		cp generate_routes.sh $OPENSTACK_DEPLOYER_PATH
+	
+		cp set_variables.sh /root/set_variables.sh
+		cp generate_routes.sh /root/generate_routes.sh
+		cp keys/keys.sh	/root/keys.sh
+		echo "$OPENSTACK_DEPLOYER_PATH REMOVE TODO"
+		cp $OPENSTACK_DEPLOYER_PATH/vars.sh /root/vars.sh
+	fi
+else
+	#If there are installer variables
+	echo "OK#"
+fi

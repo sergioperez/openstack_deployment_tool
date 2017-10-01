@@ -1,0 +1,448 @@
+##########
+Controller:
+###########
+su
+cd
+wget http://192.168.1.12:8081/release1.tar.gz
+
+tar -zxvf release1.tar.gz
+source set_variables.sh
+source keys/keys.sh
+./generate_routes.sh
+
+cp set_variables.sh $OPENSTACK_DEPLOYER_DEV
+cp keys/keys.sh $OPENSTACK_DEPLOYER_DEV
+
+#############
+#ENVIRONMENT#
+#############
+-----------------HOST NETWORKING------------------------
+#In some nodes you only have to configure the management interface
+-CONFIGURED /etc/network/interfaces manually 
+[with nameservers for some reason]
+/etc/resolvconf/resolv.conf.d/tail <- here
+
+
+#Same in all nodes
+//Cleanup of host names before adding them
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/hosts/remove_host.sh compute
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/hosts/remove_host.sh controller
+
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/hosts/add_host.sh 192.168.1.180 controller
+#todo: check conectivity?
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/hosts/add_host.sh 192.168.1.190 compute
+#todo: check conectivity?
+
+-----------------NETWORK TIME PROTOCOL--------------------
+//Update packages list
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/update_lists.sh
+
+//Install chrony
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh chrony
+
+//Configure chrony
+[TODO] Remove actual servers before adding our servers?
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/chrony/remove_all_servers.sh
+
+--We used hora.rediris.es as it is a Stratum1 server in Spain
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/chrony/add_ntp_server.sh hora.rediris.es
+!!!!!!!!In the other nodes it is recommended to use the controller node as ntp server
+($OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/chrony/add_ntp_server.sh controller )
+
+//Restart chrony for saving changes 
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh chrony
+
+*Test: chronyc sources
+----------------- INSTALL OPENSTACK PACKAGES -------------
+#PERFORM IN ALL NODES [
+//Enable OpenStack repository
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh software-properties-common && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/add_repository.sh cloud-archive:mitaka
+
+//Update packages list
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/update_lists.sh
+
+TODO: Possible problem: I'm not running dist-upgrade in order to avoid kernel updates
+
+#Install OpenStack client
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh python-openstackclient
+
+
+--------------MySQL database-----------------
+[DATABASE TIPICALLY ON CONTROLLER NODE]
+#Install packages
+--Enable silent install (no prompt)
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/mariadb/enable_silent_install.sh $ROOT_DBPASS
+
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh mariadb-server && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh python-pymysql
+
+
+---Configure-- #TODO: Use a variable or something instead of the IP (but save the IP) 
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/mariadb/configure_mariadb.sh 192.168.1.180
+
+-Restart mariadb
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh mysql
+
+--Secure installation
+TODO: TODO URGENT TODO TODO TODO TODO no prompt
+
+
+
+---------MongoDB Database------------
+[Telemetry service] [Controller node]
+#Install packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh mongodb-server && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh mongodb-clients && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh python-pymongo
+
+#Configure MongoDB
+#TODO: What to do with the ip
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/mongodb/configure_mongodb.sh 192.168.1.180
+-Restart MongoDB
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh mongodb
+
+-------------RabbitMQ------------------
+[TIPICALLY ON CONTROLLER NODE]
+#Install packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh rabbitmq-server
+
+#Create openstack user in RabbitMQ and give permissions
+#I used openstack as password in the demo
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/rabbitmq/configure_user_rabbitmq.sh openstack $RABBIT_PASS
+
+-----------Memcached----------------
+[TIPICALLY RUNS ON THE CONTROLLER NODE. FOR PRODUCTION => FIREWALL, AUTH, ENCRYPTION]
+#TODO: In some versions of the guide is not used
+#Install packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh memcached
+
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh python-memcache
+
+#Configure bind address
+#TODO: I used 192.168.1.180
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/config_tools/memcached/configure_memcached.sh 192.168.1.180
+
+#Restart service
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh memcached
+
+
+####################################
+####     IDENTITY SERVICE       ####
+####################################
+
+#Create database and set access privileges
+. $OPENSTACK_DEPLOYER_PATH/identity/db/db_setup.sh $ROOT_DBPASS 
+
+
+#Disable keystone autoinit
+. $OPENSTACK_DEPLOYER_PATH/identity/disable_keystone_autoinit.sh
+
+#Install packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh keystone && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh apache2 && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh libapache2-mod-wsgi
+
+--Configure keystone
+$OPENSTACK_DEPLOYER_PATH/identity/configure_keystone.sh $KEYSTONE_ADMINTOKEN $KEYSTONE_DBPASS
+
+--Populate keystone database
+$OPENSTACK_DEPLOYER_PATH/identity/populate_identity_database.sh
+
+
+--Initialize Fernet keys
+$OPENSTACK_DEPLOYER_PATH/identity/initialize_fernet_keys.sh 
+
+-------------Configure Apache
+. $OPENSTACK_DEPLOYER_PATH/identity/configure_apache.sh 
+
+--Restart Apache service
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh apache2
+
+--Remove SQLite Database (Not neccesary)
+$OPENSTACK_DEPLOYER_PATH/identity/remove_sqlite_database.sh
+
+
+-----------Create the service entity and API endpoints
+--Export variables
+. $OPENSTACK_DEPLOYER_PATH/identity/export_variables.sh
+
+--Create entity service
+$OPENSTACK_DEPLOYER_PATH/identity/create_identity_service.sh
+
+--Create entity endpoints
+. $OPENSTACK_DEPLOYER_PATH/identity/create_identity_endpoints.sh
+
+
+-------------Create domain, projects, users and roles
+---Create default domain 
+$OPENSTACK_DEPLOYER_PATH/identity/create_domain.sh
+
+---Create administrative project, user and role
+--Create admin project 
+$OPENSTACK_DEPLOYER_PATH/identity/create_admin_project.sh
+
+--Create admin user
+$OPENSTACK_DEPLOYER_PATH/openstack/create_user.sh admin $ADMIN_USER_KEY
+
+
+--Create admin role
+$OPENSTACK_DEPLOYER_PATH/identity/create_admin_role.sh
+
+--Add admin role to admin user 
+$OPENSTACK_DEPLOYER_PATH/identity/add_role_admin_to_user_admin.sh
+
+---Create service project
+$OPENSTACK_DEPLOYER_PATH/identity/create_service_project.sh
+
+---Create demo project and user
+--Create demo project
+$OPENSTACK_DEPLOYER_PATH/identity/create_demo_project.sh
+
+--Create demo user
+$OPENSTACK_DEPLOYER_PATH/openstack/create_user.sh demo $DEMO_USER_KEY
+
+--Create user role
+$OPENSTACK_DEPLOYER_PATH/identity/create_user_role.sh 
+
+--Add user role to demo project and user
+$OPENSTACK_DEPLOYER_PATH/identity/add_user_role_to_demo_user.sh 
+
+
+----Verify Operation
+--Disable auth token mechanism
+$OPENSTACK_DEPLOYER_PATH/identity/disable_auth_token_mechanism.sh
+
+--Unset temporary variables
+. $OPENSTACK_DEPLOYER_PATH/identity/unset_temporary_variables.sh
+
+--TODO: Requesting authentication tokens for testing
+
+
+--------- Create OpenStack client environment scripts
+. $OPENSTACK_DEPLOYER_PATH/openrc/create_admin_credentials.sh default default admin admin $ADMIN_USER_KEY http://controller:35357/v3 3 2
+. $OPENSTACK_DEPLOYER_PATH/openrc/create_admin_credentials.sh default default demo demo $DEMO_USER_KEY http://controller:35357/v3 3 2
+
+
+#########################
+##### IMAGE SERVICE #####
+#########################
+
+------Prerequisites
+. $OPENSTACK_DEPLOYER_PATH/image/db/db_setup.sh $ROOT_DBPASS 
+
+--[TODO] Source admin credentials
+. $OPENSTACK_DEPLOYER_PATH/openrc/admin-openrc
+
+--Create glance user
+. $OPENSTACK_DEPLOYER_PATH/openstack/create_user.sh glance $GLANCE_USER_KEY
+
+--Add admin role to glance user and service project
+. $OPENSTACK_DEPLOYER_PATH/image/add_admin_role_to_glance_user_service_project.sh 
+
+--Create glance service entity
+. $OPENSTACK_DEPLOYER_PATH/image/create_glance_service_entity.sh 
+
+--Create service API endpoints
+$OPENSTACK_DEPLOYER_PATH/image/create_api_endpoints.sh
+
+
+----- Install and configure components
+--Install glance
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh glance
+
+--Configure glance
+. $OPENSTACK_DEPLOYER_PATH/image/configure_glance.sh
+
+--Populate image service database
+$OPENSTACK_DEPLOYER_PATH/image/populate_service_database.sh
+
+--Restart Glance service
+. $OPENSTACK_DEPLOYER_PATH/image/restart_image_service.sh
+
+------ TODO: Verify operation
+:)
+
+##############################
+###### COMPUTE SERVICE #######
+##############################
+
+##################
+### Install and configure a controller node
+#################
+
+-----------Prerequisites
+-----Create the databases [TODO] Fix password prompt and password inside sql script
+. $OPENSTACK_DEPLOYER_PATH/compute/db/db_setup.sh $ROOT_DBPASS
+
+--source admin credentials
+. $OPENSTACK_DEPLOYER_PATH/openrc/admin-openrc 
+
+-----Create service credentials
+--Create nova user
+. $OPENSTACK_DEPLOYER_PATH/openstack/create_user.sh nova $NOVA_PASS
+
+--Add admin role to nova user
+$OPENSTACK_DEPLOYER_PATH/compute/set_nova_admin_role.sh
+
+--Create nova service entity
+$OPENSTACK_DEPLOYER_PATH/compute/create_nova_service_entity.sh
+
+-----Create Compute API endpoints
+$OPENSTACK_DEPLOYER_PATH/compute/create_compute_service_api_endpoints.sh
+
+----------Install and configure packages
+--Install the packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-api && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-conductor && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-consoleauth && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-novncproxy && \
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-scheduler 
+
+--Configure nova
+. $OPENSTACK_DEPLOYER_PATH/compute/configure_nova_controller.sh
+
+--Populate compute databases
+$OPENSTACK_DEPLOYER_PATH/compute/populate_compute_databases.sh
+
+----Finalize installation
+--Restart compute services
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-api
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-consoleauth
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-scheduler
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-conductor
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-novncproxy
+
+
+###############
+### Install and configure a compute node
+###############
+--Install the packages
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/packages/install_package.sh nova-compute
+
+--Configure nova [TODO: ip is hardcoded]
+. $OPENSTACK_DEPLOYER_PATH/compute/configure_nova_compute.sh 10.0.0.20 #(Management ip)
+
+--Configure libvirt to use qemu or kvm
+$OPENSTACK_DEPLOYER_PATH/compute/configure_libvirt.sh
+
+--Restart compute service
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION/services/service_restart.sh nova-compute
+
+--Verify operation [TODO]
+
+
+##############################
+##### NETWORKING SERVICE #####
+##############################
+
+######
+## Controller node
+######
+--Create database
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/db/db_setup.sh $ROOT_DBPASS
+
+-- Source admin credentials
+. $OPENSTACK_DEPLOYER_PATH/openrc/admin-openrc
+
+
+----Create service credentials
+--Create neutron user
+$OPENSTACK_DEPLOYER_PATH/openstack/create_user.sh neutron $NEUTRON_PASS
+
+--Add admin role to neutron user
+$OPENSTACK_DEPLOYER_PATH/networking/controller/add_admin_role_to_neutron_user.sh
+
+--Create neutron service entity
+$OPENSTACK_DEPLOYER_PATH/networking/controller/create_neutron_service_entity.sh
+
+-----Create networking API endpoints
+$OPENSTACK_DEPLOYER_PATH/networking/controller/create_neutron_api_endpoints.sh
+
+----[TODO][TODO][TODO] Configure network options
+[OPTION 1]Provider networks
+--Install packages
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/networking/provider/install_packages.sh
+
+--Configure neutron
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/networking/provider/configure_server.sh
+
+--Configure ml2 #TODO: Possible problem
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/networking/provider/configure_ml2.sh 
+
+--Configure linux bridge agent
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/networking/provider/configure_linuxbridge_agent.sh 
+
+--Configure DHCP agent
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/networking/provider/configure_dhcp_agent.sh 
+
+
+#TODO: There is no keystone_authtoken section
+#TODO: There is no nova section
+
+[OPTION 2]Self-service networks
+##
+
+--Configure the metadata agent
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/other/configure_metadata.sh
+
+--Configure compute to use networking
+. $OPENSTACK_DEPLOYER_PATH/networking/controller/other/configure_nova_compute.sh
+
+
+-- Populate database
+$OPENSTACK_DEPLOYER_PATH/networking/controller/other/populate_database.sh
+
+-- Restart services
+$OPENSTACK_DEPLOYER_PATH/networking/controller/other/restart_services.sh
+
+#######
+## Compute node
+#######
+
+-----Install and configure compute node
+--Install packages [TODO] It is going to ask about the changes in nova.conf
+. $OPENSTACK_DEPLOYER_PATH/networking/compute/install_components.sh
+
+--Configure neutron
+[TODO] there is no keystone_authtoken in the file
+. $OPENSTACK_DEPLOYER_PATH/networking/compute/configure_neutron.sh
+
+--Configure networking options
+[OPTION 1:Provider network]
+$OPENSTACK_DEPLOYER_PATH/networking/compute/networking/provider/configure_linuxbridge_agent.sh 
+
+--[TODO] Configure metadata agent
+[TODO] Creo que no hay que configurar esto :P
+
+--Configure Compute to use Networking #TODO:The file being edited does not exist*
+$OPENSTACK_DEPLOYER_PATH/networking/compute/configure_networking_usage.sh
+
+--Finalize installation
+. $OPENSTACK_DEPLOYER_PATH/networking/compute/finalize_installation.sh 
+
+
+
+
+
+#############################
+##### DASHBOARD SERVICE #####
+#############################
+
+---Install packages
+. $OPENSTACK_DEPLOYER_PATH/dashboard/install_packages.sh 
+
+---Configure dashboard
+#[TODO] Force API versions not done
+#[TODO] Time zone not set
+$OPENSTACK_DEPLOYER_PATH/dashboard/configure_horizon.sh
+
+---Finalize installation
+. $OPENSTACK_DEPLOYER_PATH/dashboard/finalize_installation.sh
+
+~~~~~~~~~~~~~~
+
+PATHS:
+OPENSTACK_DEPLOYER_PATH
+OPENSTACK_GENERATE_PASSWORD
+$OPENSTACK_DEPLOYER_PATH/os/$OPENSTACK_OS_VERSION

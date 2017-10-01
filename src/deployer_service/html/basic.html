@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+</head>
+<body>
+<div class="node">
+Controller node
+IP<input type="text" id="ip_controller">
+User<input type="text" id="username_controller">
+Password<input type="text" id="password_controller">
+Hostname<input type="text" id="hostname_controller">
+</div>
+<div class="node">
+Compute node
+IP<input type="text" id="ip_compute">
+User<input type="text" id="username_compute">
+Password<input type="text" id="password_compute">
+Hostname<input type="text" id="hostname_compute">
+</div>
+
+<input type="submit" id="submit">
+
+<div>Server Status:</div>
+<div id="serverStatus">Down</div>
+<div id="terminal"></div>
+
+<script>
+	var serverDownHTML = "Down";
+	var serverUpHTML = "Up";
+
+	var terminalData = "";
+	var ws = new WebSocket('ws://localhost:8080/'); 
+	var terminal = document.getElementById("terminal");
+	var serverStatus = document.getElementById("serverStatus");
+
+	ws.onopen = function() {
+		serverStatus.innerHTML = serverUpHTML;
+	};
+	ws.onclose = function() {
+		serverStatus.innerHTML = serverDownHTML;
+	};     
+	ws.onmessage = function(event) {
+		terminalData += "<br>"
+		terminalData += event.data;
+		terminal.innerHTML = terminalData;	
+	};
+
+	function request() {
+		terminalData = "";
+		terminal.innerHTML = terminalData;
+
+		var req = new Object();
+		var node = new Object();
+		node.ip = document.getElementById("ip_controller").value;
+		node.username = document.getElementById("username_controller").value;
+		node.password = document.getElementById("password_controller").value;
+		node.rootpass = document.getElementById("password_controller").value;
+		node.type = "controller";
+		node.services = ["identity", "image"];
+		node.hostname = document.getElementById("hostname_controller").value;
+
+		var node2 = new Object();
+		node2.ip = document.getElementById("ip_compute").value;
+		node2.username = document.getElementById("username_compute").value;
+		node2.password = document.getElementById("password_compute").value;
+		node2.rootpass = document.getElementById("password_compute").value;
+		node2.type = "compute";
+		node2.services = ["compute"];
+		node2.hostname = document.getElementById("hostname_compute").value;
+
+		req.controller = node;
+		req.compute = node2;
+
+
+		ws.send(JSON.stringify(req));
+		//alert(JSON.stringify(req));
+	}
+
+	document.getElementById("submit").addEventListener("click", request);
+
+</script>
+
+
+</body>
+</html>

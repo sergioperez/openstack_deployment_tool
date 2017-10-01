@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	<style>
+		.node {
+			border-width:1px;
+			border-style:solid;
+			}
+	</style>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jQuery.serializeObject/2.0.3/jquery.serializeObject.min.js"></script>
+	<script>
+		$(document).ready(function() {
+			var fields          = $(".fields"); //Fields
+			var add_button      = $(".add_field"); //Add button
+			var send_install_request     = $(".send_install_request"); //Send fields button
+
+			var x = 0; //Text box count
+
+			var allservices = []; 
+
+			//HTML code for each node
+			var nodeHTML = '<div class="node">'
+								+ '<div class="indexdiv">j</div>'
+								+ ' Hostname<input type="text" name="hostname">'
+								+ ' IP<input type="text" name="ip">'
+								+ ' Username<input type="text" name="username">'
+								+ ' Password<input type="text" name="password">'
+								+ '<br>'
+								+ ' <input type="text" name="services" class="services">'
+								+ '<br>'
+								+ '<button type="button" class="add_service" name="identity">Identity</button>'
+								+ '<button type="button" class="add_service" name="image">Image</button>'
+								+ '<button type="button" class="add_service" name="compute-controller">Compute controller</button>'
+								+ '<button type="button" class="add_service" name="compute">Compute</button>'
+								+ '<button type="button" class="add_service" name="networking-controller">Networking controller</button>'
+								+ '<button type="button" class="add_service" name="networking">Networking</button>'
+								+ '<button type="button" class="add_service" name="dashboard">Dashboard</button>'
+								+ '<br>'
+								+ '<a href="#" class="remove_field fa fa-times"></a></div>';
+
+			//Add node button handler
+			$(add_button).click(function(e) {
+				e.preventDefault(); //undo event
+
+				$(fields).append(nodeHTML);
+
+				$(".node").last().children(".indexdiv").html(x);
+				allservices[x] = [];
+				x++;
+			});
+
+			//Remove node handler
+			$(fields).on("click",".remove_field", function(e) {
+				e.preventDefault(); 
+				var index = $(this).siblings(".indexdiv").html(); //Select corresponding node
+				allservices[index] = []; //Services of the node are removed from the list
+				$(this).parent('div').remove(); //Removing the node entry
+			});
+
+
+			//Service click listener
+			$(fields).on("click",".add_service", function(e) {
+				e.preventDefault();
+				var index = $(this).siblings(".indexdiv").html();
+				var serv = this.name;
+				if(allservices[index].indexOf(serv) < 0) {
+					allservices[index].push(serv);
+					$(this).css('color', 'green');
+					$(this).css('font-weight', 'bold');
+				}
+				else {
+					allservices[index].splice( allservices[index].indexOf(serv), 1);
+					$(this).css('color', 'grey');
+					$(this).css('font-weight', 'normal');
+				}
+				$(this).siblings(".services").val(allservices[index]); 
+			});
+
+			//Deploy OpenStack button handler
+			$(send_install_request).click(function(e) {
+				var tmp_fields = $('form#form').serializeObject();
+				var fields;
+				var numNodes = tmp_fields["hostname"].length;
+
+				if(numNodes == 0) {
+					alert("Add nodes");
+				}
+				else {
+					var nodes = {};
+					for( var i = 0 ; i < tmp_fields["hostname"].length ; i++) {
+						var hostname = tmp_fields["hostname"][i];
+						var ip = tmp_fields["ip"][i];
+						var username = tmp_fields["username"][i];
+						var password = tmp_fields["password"][i];
+						var services = tmp_fields["services"][i].split(",");
+						var node = {};
+					
+						node["ip"] = ip;
+						node["management_ip"] = ip;
+						node["username"] = username;
+						node["password"] = password;
+						node["type"] = hostname;
+						node["services"] = services;
+						
+						nodes[hostname] = node;
+					}
+					console.log(JSON.stringify(nodes));
+					ws.send(JSON.stringify(nodes));
+				}
+			});
+		});
+
+		var ws = new WebSocket('ws://localhost:8080');
+		ws.onopen = function() {
+			$("#server_status").removeClass("serveroff").addClass("serveron");
+			$("#server_status").html("On");
+		};
+
+		ws.onclose = function() {
+			$("#server_status").removeClass("serveron").addClass("serveroff");
+			$("#server_status").html("Off");
+		};
+
+		ws.onmessage = function(event) {
+			document.getElementById('terminal').insertAdjacentHTML('beforeend', "<br>" + event.data);
+			if(event.data.startsWith("[X] Installation finished")) {
+				//new Audio('./res/ostack3.ogg').play();
+			}
+		};
+	</script>
+
+	<script src="https://use.fontawesome.com/4bfb9ab5ea.js"></script>
+
+	<style>
+		.serveron {
+			color: green;
+			font-weight: bold;
+		}
+
+		.serveroff {
+			color: red;
+			font-weight: bold;
+		}
+
+		.remove_field {
+			color: red;
+			font-size: 20px;
+		}
+
+		*{
+			text-align: center;
+		}
+
+		.indexdiv {
+			visibility: hidden;
+			height: 0px;
+		}
+
+		.services {
+			visibility: hidden;
+			height: 0px;
+		}
+
+		#terminal {
+			overflow: scroll;
+			background-color: black;
+			color: white;
+			font-family: monospace;
+			text-align: left;
+			height: 170px;
+			max-height: 50%;
+		}
+
+	</style>
+
+	</head>
+	<body>
+		<div id="server_status_box">Server Status:
+			<div id="server_status" class="serveroff">Off</div>
+		</div>
+
+		<div id="first_state">
+			<form id="form">
+				<div class="fields" id="fields">
+				</div>
+			</form>
+			<button class="fa fa-plus-circle add_field"> Add Node</button>
+
+			<button class="send_install_request">Start installation</button>
+		</div>
+
+		<div id="second_state">
+			<div id="terminal">
+			</div>
+		</div>
+
+	</body>
+</html>
